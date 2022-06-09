@@ -1,13 +1,17 @@
+import base64
 import json
+from urllib import response
+import flask
 from flask_login import current_user, login_required,login_user, logout_user
 from app import app,db
 from app.models import Item,User
 from flask import redirect, render_template,jsonify, request
 
 
-@app.route('/',methods=["POST", "GET"])
+@app.route('/',methods=["POST", "GET","DELETE"])
+@login_required
 def index():
-    u=User.query.get(1)
+    u=current_user
     if request.method=="POST":
         request_data=request.data
         request_data=json.loads(request_data.decode("utf-8"))
@@ -16,11 +20,17 @@ def index():
         db.session.add(i)
         db.session.commit()
         return "data saved successfully"
-    else:
-        cols = ['id', 'type', 'data']
-        data = Item.query.all()
+    elif request.method=="GET":
+        cols = ['id', 'data']
+        data = Item.query.filter_by(user_id=u.id)
         result = [{col: getattr(d, col) for col in cols} for d in data]
         return jsonify(result)
+    else:
+        request_data=request.data
+        request_data=json.loads(request_data.decode("utf-8"))
+        Item.query.filter(Item.id==request_data).delete()
+        db.session.commit()
+        return jsonify(["item deleted"])
 
 
 @app.route('/register',methods=['GET','POST'])
@@ -50,28 +60,38 @@ def register():
         
 @app.route('/login',methods=['GET','POST'])
 def login():
+    active_user=current_user
     if request.method=="POST": 
         request_data=request.data
         request_data=json.loads(request_data.decode("utf-8"))
+        
         username=request_data['username']
         password=request_data['password']
         user =User.query.filter((User.username==username)|(User.email==username)).first()
         if user is None or not user.check_password(password):
             return jsonify(['wrong username or password']) 
-        l=login_user(user,remember=True,force=True)
-        if l==True:
-            return jsonify(['login success'])
-        else:
-            return jsonify(["login failed"])
+        login_user(user,force=True)
+        user.generate_hash_key()
+        print(current_user.is_authenticated)
+        resp=flask.make_response("login success")
+        resp.headers['api-key']=user.api_key
+        print(current_user.get_id)
+        return resp
     else:
-        if current_user.is_anonymous:
-            return jsonify(['user is online'])
+        print(active_user.is_authenticated,'this is get')
+        print(current_user.get_id)
+        print(request.headers.get('Authorization'))
+        if current_user.is_authenticated:
+            response=flask.make_response("user is online")
         else:
-            return jsonify(['user is offline'])
+            response=flask.make_response("user is offline")
+        return response
+        
 
 @app.route('/logout',methods=['GET','POST'])
 @login_required
 def logout():
+    current_user.delete_key()
     logout_user()
     return jsonify(['user logout'])
         
