@@ -19,7 +19,9 @@ def index():
         i=Item(data=data,user=u)
         db.session.add(i)
         db.session.commit()
-        return "data saved successfully"
+        resp=flask.make_response("data saved successfully")
+        resp.headers['id']=i.id
+        return resp
     elif request.method=="GET":
         cols = ['id', 'data']
         data = Item.query.filter_by(user_id=u.id)
@@ -52,11 +54,11 @@ def register():
                     u.set_password(password)
                     db.session.add(u)
                     db.session.commit()
-                    return jsonify(['register success'])
+                    return 'register success'
                 else:
-                    return jsonify(['Please use a different email address.'])
+                    return 'Please use a different email address.'
             else:
-                return jsonify(['Please use a different username.'])
+                return 'Please use a different username.'
         
 @app.route('/login',methods=['GET','POST'])
 def login():
@@ -69,7 +71,7 @@ def login():
         password=request_data['password']
         user =User.query.filter((User.username==username)|(User.email==username)).first()
         if user is None or not user.check_password(password):
-            return jsonify(['wrong username or password']) 
+            return 'wrong username or password' 
         login_user(user,force=True)
         user.generate_hash_key()
         print(current_user.is_authenticated)
